@@ -173,7 +173,7 @@ kubectl get pods -n capd-system --watch
 
   - **Review Carefully:** Check resource names, namespaces, infrastructureRef/configRef links, Kubernetes versions, and especially the network CIDRs.
 
-Example Structure (Fill with details and full CNI manifest):
+**Example Structure (Fill with details and full CNI manifest):**
 
 [workload-cluster-docker.yaml](workload-cluster-docker.yaml)
 
@@ -205,7 +205,7 @@ kubectl get clusterresourceset
 ```
 This will take several minutes.
 
-6. Get Workload Cluster Kubeconfig:
+6. **Get Workload Cluster Kubeconfig:**
 Once the control plane is ready (kubectl get kubeadmcontrolplane shows READY=true), retrieve its kubeconfig:
 
 ```bash
