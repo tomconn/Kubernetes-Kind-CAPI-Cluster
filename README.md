@@ -1,6 +1,6 @@
-# Kind Cluster for Cluster API (CAPI) using OpenTofu on macOS with Rancher Desktop
+# Kind Cluster for Cluster API (CAPI) bootstrapped using OpenTofu on macOS with Rancher Desktop
 
-This project uses OpenTofu to provision a local Kubernetes cluster using Kind on macOS. It leverages Rancher Desktop configured with the **`moby` (Docker)** container engine. This first cluster (`capi-management`) acts as a **Cluster API (CAPI) Management Cluster**.
+This project uses OpenTofu to provision a local Kind Kubernetes cluster. It leverages Rancher Desktop configured with the **`moby` (Docker)** container engine. This first cluster (`capi-management`) acts as a **Cluster API (CAPI) Management Cluster**.
 
 The setup utilizes OpenTofu's `null_resource` with `local-exec` provisioners to execute `kind` CLI commands for reliable cluster creation and `clusterctl init` for CAPI initialization.
 
@@ -69,7 +69,7 @@ This ensures a standard Docker socket (`/var/run/docker.sock`) is natively avail
 docker ps                     # Should run without error (list headers or containers)
 ```
 
-# Part 1: Setup CAPI Management Cluster (with OpenTofu)
+## Part 1: Setup CAPI Management Cluster (with OpenTofu)
 1. This section creates the primary Kind cluster that will manage other clusters.
   - Get Files: Clone or download the project files (main.tf, variables.tf, versions.tf, outputs.tf, kind-config.yaml) into a local directory. Ensure these files are present:
   - main.tf: Contains null_resource definitions for Kind and clusterctl.
@@ -99,7 +99,7 @@ tofu plan
 ```bash
 tofu apply -auto-approve
 ```
-# Part 2: Verification (Management Cluster)
+## Part 2: Verification (Management Cluster)
 1. Check Kind Cluster:
 
 ```bash
@@ -132,12 +132,13 @@ kubectl get pods -A # Look for pods in capi-*, capa-*, capz-*, capg-* namespaces
 ```
 
 5. **Check clusterctl Configuration:** Verify clusterctl can read the provider configuration from the management cluster.
+
 ```bash
 clusterctl version
 clusterctl config repositories # Should list core, bootstrap, control-plane, and infra providers
 ```
 
-# Part 3: Create Docker Workload Cluster (with CAPI)
+## Part 3: Create Docker Workload Cluster (with CAPI)
 Now, use the capi-management cluster to create a new workload cluster running in Docker containers.
 
 1. **Prerequisites for this Part:**
@@ -212,7 +213,7 @@ Once the control plane is ready (kubectl get kubeadmcontrolplane shows READY=tru
 clusterctl get kubeconfig capi-workload-docker > capi-workload-docker.kubeconfig
 ```
 
-# Part 4: Verification (Workload Cluster)
+## Part 4: Verification (Workload Cluster)
 
 1. **Set KUBECONFIG for Workload Cluster:** Point kubectl to the new workload cluster.
 ```bash
@@ -236,7 +237,7 @@ kubectl get pods -A | grep calico # Or your chosen CNI
 ```
 
 ## Usage
-- Your capi-management cluster (running in Kind) is now managing the lifecycle of your capi-workload-docker cluster (running in Docker containers via Rancher Desktop).
+- Your capi-management cluster (running in Kind) is now managing the lifecycle of your capi-workload-docker cluster.
 - You can manage the workload cluster by modifying the CAPI manifests (workload-cluster-docker.yaml) and applying them to the management cluster. For example, scale the MachineDeployment replicas.
 - Use kubectl with the appropriate KUBECONFIG to interact with either the management or workload cluster.
 - Refer to the Cluster API Book for detailed guides on advanced CAPI operations.
@@ -266,5 +267,8 @@ rm kubeconfig-capi-management.yaml kubeconfig-capi-workload-docker.kubeconfig # 
 rm -rf .terraform tofu.tfstate tofu.tfstate.backup terraform.tfstate.backup terraform.tfstate .terraform.lock.hcl
 ```
 
-
-
+## ToDo
+1. Originally tried using containerd but quickly ran into problems. Reverted to Docker, I'll do more research to determine if I can resolve this.
+2. Use Ansible for the TF bootstrap provisioners, is this over kill|engineering?
+3. Create a couple of clusters across AWS and GCP, try both the managed EKS/GKE and 'k8s the hard way'.
+4. Investigate CAPI for Public cloud native resource provisioning. Use TF or AWS controllers etc? Or is Crossplane a solution with less friction? 
