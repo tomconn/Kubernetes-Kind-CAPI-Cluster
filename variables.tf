@@ -1,4 +1,3 @@
-# variables.tf
 variable "cluster_name" {
   description = "Kind cluster."
   type        = string
@@ -15,5 +14,5 @@ variable "capi_providers" {
   description = "List of Cluster API infrastructure providers to install (e.g., docker, aws, azure, gcp)."
   type        = list(string)
   default     = ["docker"]
-  # Note: Bare metal (capbm/metal3) often requires more specific setup beyond a simple init.
+  # Note: Only use default docker for this example
 }

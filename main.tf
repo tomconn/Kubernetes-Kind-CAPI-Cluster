@@ -1,5 +1,3 @@
-# main.tf
-
 provider "kind" {
   # Provider block still needed, even if not creating cluster resource directly
 }

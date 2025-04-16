@@ -64,7 +64,7 @@ This ensures a standard Docker socket (`/var/run/docker.sock`) is natively avail
 
 *(Note: While using `containerd` as the Rancher Desktop engine is possible, it relies on a Docker socket compatibility layer provided by Rancher Desktop that can sometimes be problematic. If you encounter `docker ps ... exit status 1` errors when using `containerd` mode, switching to the `moby` engine is the recommended solution for this guide.)*
 
-Verify the Docker connection:
+**Verify the Docker connection:**
 ```bash
 docker ps                     # Should run without error (list headers or containers)
 ```
@@ -78,19 +78,19 @@ docker ps                     # Should run without error (list headers or contai
   - outputs.tf: Defines outputs like the management cluster kubeconfig path.
   - kind-config.yaml: Defines the Kind cluster structure (1 control-plane, 2 workers).
 2. Verify Prerequisites: Double-check that kind, kubectl, and clusterctl are installed and runnable from your terminal.
-3. Initialize OpenTofu: Download necessary providers.
+3. **Initialize OpenTofu:** Download necessary providers.
 
 ```bash
 tofu init
 ```
 
-4. Review Plan: See what OpenTofu will create (primarily null_resource actions).
+4. **Review Plan:** See what OpenTofu will create (primarily null_resource actions).
 
 ```bash
 tofu plan
 ```
 
-5. Apply Configuration: This executes the local-exec commands to:
+5. **Apply Configuration:** This executes the local-exec commands to:
   - Create the Kind cluster (capi-management) using kind create cluster.
   - Generate the kubeconfig file (kubeconfig-capi-management.yaml).
   - Initialize CAPI core components and specified providers (AWS, Azure, GCP by default) using clusterctl init.
@@ -106,7 +106,7 @@ tofu apply -auto-approve
 kind get clusters
 # Should show 'capi-management' (or your custom name)
 ```
-2. Set KUBECONFIG for Management Cluster: Crucially, point kubectl and clusterctl to your new management cluster.
+2. **Set KUBECONFIG for Management Cluster:** Crucially, point kubectl and clusterctl to your new management cluster.
 
 ```bash
 # Get the exact path from the output
@@ -119,19 +119,19 @@ echo "Using Kubeconfig: $KUBECONFIG"
 kubectl config current-context # Should show 'kind-capi-management'
 ```
 
-3. Check Nodes:
+3. **Check Nodes:**
 
 ```bash
 kubectl get nodes -o wide # Should show 1 control-plane, 2 workers Ready
 ```
 
-4. Check CAPI Installation:
+4. **Check CAPI Installation:**
 
 ```bash
 kubectl get pods -A # Look for pods in capi-*, capa-*, capz-*, capg-* namespaces
 ```
 
-5. Check clusterctl Configuration: Verify clusterctl can read the provider configuration from the management cluster.
+5. **Check clusterctl Configuration:** Verify clusterctl can read the provider configuration from the management cluster.
 ```bash
 clusterctl version
 clusterctl config repositories # Should list core, bootstrap, control-plane, and infra providers
@@ -140,11 +140,11 @@ clusterctl config repositories # Should list core, bootstrap, control-plane, and
 # Part 3: Create Docker Workload Cluster (with CAPI)
 Now, use the capi-management cluster to create a new workload cluster running in Docker containers.
 
-1. Prerequisites for this Part:
+1. **Prerequisites for this Part:**
   -Management cluster (capi-management) is running.
   -Rancher Desktop (Moby) is running.
   -Your terminal's KUBECONFIG environment variable is pointing to the management cluster (set in the previous verification step).
-2. Verify/Install CAPI Docker Provider (CAPD):
+2. **Verify/Install CAPI Docker Provider (CAPD):**
   - The initial clusterctl init might not have included the Docker provider. Check and install if needed.
 
 ```bash
@@ -158,10 +158,10 @@ clusterctl init --infrastructure docker
 kubectl get pods -n capd-system --watch
 ```
 
-3. Define Workload Cluster Manifest:
+3. **Define Workload Cluster Manifest:**
   - Create a new file named workload-cluster-docker.yaml.
   - Copy the content for this file from a reliable CAPI Docker example. See the Cluster API Book Quick Start or use the example structure below as a guide.
-  - Key Components in the Manifest:
+  - **Key Components in the Manifest:**
     * Cluster: Top-level object. Defines Pod/Service CIDRs (ensure they don't overlap with host/management cluster). Add labels for ClusterResourceSet if using CNI automation.
     * DockerCluster: Infrastructure-specific cluster object for CAPD.
     * KubeadmControlPlane: Defines the control plane nodes. Specifies K8s version.
@@ -171,20 +171,20 @@ kubectl get pods -n capd-system --watch
     * DockerMachineTemplate (for Workers): Template for worker Docker machines.
     (Optional) ClusterResourceSet & ConfigMap: To automatically install a CNI (like Calico). Important: * You need the full CNI manifest (e.g., calico.yaml) inside the ConfigMap - fetch it from the official CNI documentation. Ensure the CIDRs specified in the manifest match the Cluster object.
 
-  - Review Carefully: Check resource names, namespaces, infrastructureRef/configRef links, Kubernetes versions, and especially the network CIDRs.
+  - **Review Carefully:** Check resource names, namespaces, infrastructureRef/configRef links, Kubernetes versions, and especially the network CIDRs.
 
 Example Structure (Fill with details and full CNI manifest):
 
 [workload-cluster-docker.yaml](workload-cluster-docker.yaml)
 
-4. Apply the Workload Cluster Manifest:
+4. **Apply the Workload Cluster Manifest:**
 Make sure kubectl is still pointing to the capi-management cluster.
 
 ```bash
 kubectl apply -f workload-cluster-docker.yaml
 ```
 
-5. Monitor Workload Cluster Creation:
+5. **Monitor Workload Cluster Creation:**
 Watch the CAPI resources being created within the management cluster:
 
 ```bash
@@ -214,21 +214,21 @@ clusterctl get kubeconfig capi-workload-docker > capi-workload-docker.kubeconfig
 
 # Part 4: Verification (Workload Cluster)
 
-1. Set KUBECONFIG for Workload Cluster: Point kubectl to the new workload cluster.
+1. **Set KUBECONFIG for Workload Cluster:** Point kubectl to the new workload cluster.
 ```bash
 export KUBECONFIG=./capi-workload-docker.kubeconfig
 echo "Using Kubeconfig: $KUBECONFIG"
 kubectl config current-context # Should show 'capi-workload-docker-admin@capi-workload-docker'
 ```
 
-2. Check Workload Nodes:
+2. **Check Workload Nodes:**
 
 ```bash
 kubectl get nodes -o wide
 # Should show 1 control-plane and N worker nodes (based on replicas) in Ready state
 ```
 
-3. Check CNI Pods (if using ClusterResourceSet):
+3. **Check CNI Pods (if using ClusterResourceSet):**
 
 ```bash
 kubectl get pods -A | grep calico # Or your chosen CNI
@@ -242,7 +242,7 @@ kubectl get pods -A | grep calico # Or your chosen CNI
 - Refer to the Cluster API Book for detailed guides on advanced CAPI operations.
 
 ## Cleanup
-1. (Optional) Delete Workload Cluster via CAPI: Before destroying the management cluster, you can gracefully delete the workload cluster using CAPI.
+1. **(Optional) Delete Workload Cluster via CAPI:** Before destroying the management cluster, you can gracefully delete the workload cluster using CAPI.
 
 ```bash
 # Point KUBECONFIG back to the MANAGEMENT cluster
@@ -252,25 +252,19 @@ kubectl delete -f workload-cluster-docker.yaml
 # Also check 'docker ps' to see workload containers being removed.
 ```
 
-2. Destroy Management Cluster: This will execute kind delete cluster for the capi-management cluster via OpenTofu's destroy provisioner.
+2. **Destroy Management Cluster:** This will execute kind delete cluster for the capi-management cluster via OpenTofu's destroy provisioner.
 
 ```bash
 # Make sure you are in the directory with the tofu files
 tofu destroy --no-approve
 ```
 
-3. (Optional) Clean up local files: Manually remove generated kubeconfig files and OpenTofu working files.
+3. **(Optional) Clean up local files:** Manually remove generated kubeconfig files and OpenTofu working files.
 
 ```bash
 rm kubeconfig-capi-management.yaml kubeconfig-capi-workload-docker.kubeconfig # Adjust names if changed
 rm -rf .terraform tofu.tfstate tofu.tfstate.backup terraform.tfstate.backup terraform.tfstate .terraform.lock.hcl
 ```
 
-
-```bash
-```
-
-```bash
-```
 
 
