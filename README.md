@@ -269,6 +269,6 @@ rm -rf .terraform tofu.tfstate tofu.tfstate.backup terraform.tfstate.backup terr
 
 ## ToDo
 1. Originally tried using containerd but quickly ran into problems. Reverted to Docker, I'll do more research to determine if I can resolve this.
-2. Use Ansible for the TF bootstrap provisioners, is this over kill|engineering?
+2. Use Ansible for the TF bootstrap provisioners, is this over kill | engineering?
 3. Create a couple of clusters across AWS and GCP, try both the managed EKS/GKE and 'k8s the hard way'.
 4. Investigate CAPI for Public cloud native resource provisioning. Use TF or AWS controllers etc? Or is Crossplane a solution with less friction? 
