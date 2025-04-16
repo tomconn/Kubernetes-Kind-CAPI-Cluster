@@ -1,0 +1,14 @@
+# macOS Finder specific files
+# These store custom folder attributes (like icon positions) and should not be versioned.
+.DS_Store
+
+# While the rule above covers this, explicitly listing it can sometimes improve clarity
+# for specific build/ignore tooling, though it's generally redundant for Git itself.
+# functions/.DS_Store
+
+.terraform 
+tofu.tfstate 
+tofu.tfstate.backup 
+.terraform.lock.hcl
+terraform.tfstate
+terraform.tfstate.backup

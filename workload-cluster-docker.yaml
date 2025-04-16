@@ -1,0 +1,283 @@
+# workload-cluster-docker.yaml
+
+apiVersion: cluster.x-k8s.io/v1beta1
+kind: Cluster
+metadata:
+  name: capi-workload-docker # Name for your workload cluster
+  namespace: default
+  labels: # Add labels for ClusterResourceSet selector
+    cni: calico
+spec:
+  # Define network ranges for the workload cluster - MUST NOT OVERLAP with host or management cluster
+  clusterNetwork:
+    pods:
+      cidrBlocks: ["192.168.0.0/16"] # Example Pod CIDR
+    services:
+      cidrBlocks: ["10.100.0.0/16"] # Example Service CIDR (avoid default 10.96.0.0/12 if management uses it)
+  # Reference to the infrastructure-specific cluster object (DockerCluster)
+  infrastructureRef:
+    apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+    kind: DockerCluster
+    name: capi-workload-docker # Must match DockerCluster name
+    namespace: default
+---
+apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+kind: DockerCluster
+metadata:
+  name: capi-workload-docker # Must match infrastructureRef name above
+  namespace: default
+spec:
+  # No specific spec needed for basic local Docker setup
+---
+apiVersion: controlplane.cluster.x-k8s.io/v1beta1
+kind: KubeadmControlPlane
+metadata:
+  name: capi-workload-docker-cp # Name for the control plane group
+  namespace: default
+spec:
+  replicas: 1 # Number of control plane nodes
+  version: v1.27.3 # Kubernetes version (match management cluster image or choose compatible)
+  machineTemplate:
+    # Reference to the infrastructure template for control plane machines
+    infrastructureRef:
+      apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+      kind: DockerMachineTemplate
+      name: capi-workload-docker-cp-template # Must match DockerMachineTemplate name
+      namespace: default
+  kubeadmConfigSpec:
+    # Kubeadm configuration for initializing the control plane
+    clusterConfiguration:
+      apiServer:
+        certSANs: [localhost, 127.0.0.1] # Allows accessing API from host
+      controllerManager:
+         extraArgs:
+           # Important: Set the correct CIDR here for Calico/other CNIs
+           cluster-cidr: "192.168.0.0/16" # Must match spec.clusterNetwork.pods.cidrBlocks above
+    initConfiguration:
+      nodeRegistration:
+        kubeletExtraArgs:
+          cgroup-driver: cgroupfs # Often needed for Docker containers
+          eviction-hard: "nodefs.available<0%,imagefs.available<0%" # Avoid issues on small nodes
+          kube-reserved: "cpu=200m,memory=200Mi" # Reserve resources
+    joinConfiguration:
+      nodeRegistration:
+        kubeletExtraArgs:
+          cgroup-driver: cgroupfs
+          eviction-hard: "nodefs.available<0%,imagefs.available<0%"
+          kube-reserved: "cpu=200m,memory=200Mi"
+---
+apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+kind: DockerMachineTemplate
+metadata:
+  name: capi-workload-docker-cp-template # Name for control plane machine definition
+  namespace: default
+spec:
+  template:
+    spec:
+       # Optional: specify image, otherwise CAPD picks one matching K8s version
+       # customImage: "kindest/node:v1.27.3"
+       extraMounts: [] # Add host mounts if needed
+---
+apiVersion: cluster.x-k8s.io/v1beta1
+kind: MachineDeployment
+metadata:
+  name: capi-workload-docker-md-0 # Name for the worker node deployment
+  namespace: default
+spec:
+  clusterName: capi-workload-docker # Link to the Cluster object
+  replicas: 1 # Number of worker nodes
+  selector:
+    matchLabels:
+      cluster.x-k8s.io/cluster-name: capi-workload-docker
+      cluster.x-k8s.io/deployment-name: capi-workload-docker-md-0
+  template:
+    metadata:
+      labels:
+        cluster.x-k8s.io/cluster-name: capi-workload-docker
+        cluster.x-k8s.io/deployment-name: capi-workload-docker-md-0
+    spec:
+      clusterName: capi-workload-docker
+      version: v1.27.3 # Kubernetes version for workers (match control plane)
+      # Reference to the bootstrap configuration template (KubeadmConfigTemplate)
+      bootstrap:
+        configRef:
+          apiVersion: bootstrap.cluster.x-k8s.io/v1beta1
+          kind: KubeadmConfigTemplate
+          name: capi-workload-docker-md-0-template # Must match KubeadmConfigTemplate name
+          namespace: default
+      # Reference to the infrastructure template (DockerMachineTemplate)
+      infrastructureRef:
+        apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+        kind: DockerMachineTemplate
+        name: capi-workload-docker-md-0-docker-template # Must match DockerMachineTemplate name
+        namespace: default
+---
+apiVersion: bootstrap.cluster.x-k8s.io/v1beta1
+kind: KubeadmConfigTemplate
+metadata:
+  name: capi-workload-docker-md-0-template # Name for worker bootstrap config
+  namespace: default
+spec:
+  template:
+    spec:
+      # Kubeadm configuration for joining worker nodes
+      joinConfiguration:
+        nodeRegistration:
+          kubeletExtraArgs:
+            cgroup-driver: cgroupfs
+            eviction-hard: "nodefs.available<0%,imagefs.available<0%"
+            kube-reserved: "cpu=100m,memory=100Mi"
+---
+apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+kind: DockerMachineTemplate
+metadata:
+  name: capi-workload-docker-md-0-docker-template # Name for worker machine definition
+  namespace: default
+spec:
+  template:
+    spec:
+       # Optional: specify image
+       # customImage: "kindest/node:v1.27.3"
+       extraMounts: []
+---
+# ========== CNI Installation using ClusterResourceSet ==========
+# This ConfigMap stores the Calico manifest
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: calico-cni-manifest
+  namespace: default
+data:
+  manifest: |
+    # Calico Manifest v3.26.1 (or fetch the latest stable version)
+    # Ensure the IP range here matches your clusterNetwork.pods.cidrBlocks
+    # For non-standard CIDRs, you might need to patch the CALICO_IPV4POOL_CIDR below
+    ---
+    # Source: https://raw.githubusercontent.com/projectcalico/calico/v3.26.1/manifests/calico.yaml
+    # This manifest installs the Calico CNI plugin and network policies.
+    # For more information, see https://projectcalico.docs.tigera.io/getting-started/kubernetes/self-managed-onprem/onpremises
+    # This manifest is meant for deployment using calicoctl.
+    # See https://projectcalico.docs.tigera.io/getting-started/kubernetes/installation/calico for parameters.
+    # --- CustomResourceDefinition for IPPools
+    apiVersion: apiextensions.k8s.io/v1
+    kind: CustomResourceDefinition
+    metadata:
+      name: ippools.crd.projectcalico.org
+    spec:
+      group: crd.projectcalico.org
+      names:
+        kind: IPPool
+        listKind: IPPoolList
+        plural: ippools
+        singular: ippool
+      scope: Cluster
+      versions:
+      - name: v1
+        schema:
+          openAPIV3Schema:
+            description: IPPool contains information about a specific IP address pool.
+            properties:
+              apiVersion:
+                description: 'APIVersion defines the versioned schema of this representation
+                  of an object. Servers should convert recognized schemas to the latest
+                  internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+                type: string
+              kind:
+                description: 'Kind is a string value representing the REST resource this
+                  object represents. Servers may infer this from the endpoint the client
+                  submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+                type: string
+              metadata:
+                type: object
+              spec:
+                description: IPPoolSpec contains the specification for an IPPool resource.
+                properties:
+                  allowedUses:
+                    description: "AllowedUse controls what the IP addresses within this pool
+                      are allowed to be used for. If not specified or empty, defaults to
+                      [\"Tunnel\", \"Workload\"]."
+                    items:
+                      type: string
+                    type: array
+                  blockSize:
+                    description: The block size specifies the CIDR prefex length to use
+                      when allocating blocks of IP addresses for nodes. If not specified,
+                      defaults to 26 for IPv4 and 122 for IPv6.
+                    type: integer
+                  cidr:
+                    description: The pool CIDR. It must be a valid CIDR notation. Required.
+                    type: string
+                  ipipMode:
+                    description: 'When UseIPPool is true, ipipMode specifies whether IP-in-IP
+                      tunneling is enabled or disabled for this pool. Possible values are:
+                      Always, Never, CrossSubnet. If not specified, defaults to Always.
+                      Recommended setting is CrossSubnet.'
+                    enum:
+                    - Always
+                    - CrossSubnet
+                    - Never
+                    type: string
+                  natOutgoing:
+                    description: When natOutgoing is true, IP addresses from this pool
+                      are used for NAT when sending traffic outside of the cluster. When
+                      false, the node''s IP address is used instead. If not specified,
+                      defaults to false.
+                    type: boolean
+                  nodeSelector:
+                    description: 'Allows IPPool to allocate for a specific node by label
+                      selector. If not specified, it allows allocation for all nodes.
+
+                      Note: If you define enabled pools using nodeSelector, you should also
+                      define disabled pools that match the remaining nodes.  Otherwise,
+                      nodes that are not matched by the selector will not be allocated
+                      addresses.'
+                    type: string
+                  vxlanMode:
+                    description: 'When UseIPPool is true, vxlanMode specifies whether
+                      VXLAN encapsulation is enabled or disabled for this pool. Possible values
+                      are: Always, Never, CrossSubnet. If not specified, defaults to Never.
+                      Recommended setting is CrossSubnet.'
+                    enum:
+                    - Always
+                    - CrossSubnet
+                    - Never
+                    type: string
+                required:
+                - cidr
+                type: object
+            type: object
+        served: true
+        storage: true
+    # (... rest of the lengthy Calico manifest omitted for brevity ...)
+    # --- Calico Node DaemonSet
+    # (... contains calico-node daemonset definition ...)
+    # --- Calico Kube Controllers Deployment
+    # (... contains calico-kube-controllers deployment definition ...)
+    # --- Example IPPool Configuration (will be created by Calico itself)
+    # - apiVersion: crd.projectcalico.org/v1
+    #   kind: IPPool
+    #   metadata:
+    #     name: default-ipv4-ippool
+    #   spec:
+    #     cidr: 192.168.0.0/16 # THIS MUST MATCH YOUR POD CIDR
+    #     ipipMode: Always # Or CrossSubnet
+    #     natOutgoing: true
+    #     nodeSelector: all()
+    #     vxlanMode: Never # Or CrossSubnet
+---
+# This ClusterResourceSet applies the Calico manifest ConfigMap
+# to the workload cluster once it's ready.
+apiVersion: addons.cluster.x-k8s.io/v1beta1
+kind: ClusterResourceSet
+metadata:
+  name: capi-workload-docker-cni
+  namespace: default
+spec:
+  # Apply to any cluster with the 'cni: calico' label
+  clusterSelector:
+    matchLabels:
+      cni: calico
+  # List of resources to apply from ConfigMaps/Secrets
+  resources:
+  - kind: ConfigMap
+    name: calico-cni-manifest # Reference the ConfigMap created above
