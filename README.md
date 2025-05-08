@@ -257,7 +257,7 @@ kubectl delete -f workload-cluster-docker.yaml
 
 ```bash
 # Make sure you are in the directory with the tofu files
-tofu destroy --no-approve
+tofu destroy --auto-approve
 ```
 
 3. **(Optional) Clean up local files:** Manually remove generated kubeconfig files and OpenTofu working files.
